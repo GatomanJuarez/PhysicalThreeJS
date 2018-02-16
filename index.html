@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>3D with WebGL</title>
+    <style>
+    body{
+        margin: 0px;
+        background-color: #000000;
+        overflow: hidden;
+    }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <script src="JS/three.min.js"></script>
+    <script src="JS/physi.js"></script>
+    <script>
+        Physijs.scripts.worker = 'JS/physijs_worker.js';
+        Physijs.scripts.ammo = 'ammo.js';
+        var camera, scene, renderer, ground_material, ground, setMousePosition, object, mouse_position;
+        
+        init = function (){
+            var container = document.getElementById('container');
+            camera = new THREE.PerspectiveCamera(
+                45,
+                window.innerWidth / window.innerHeight,
+                1,
+                1000
+            );
+
+
+            scene = new Physijs.Scene();
+            scene.setGravity(new THREE.Vector3(0, -30, 0));
+            scene.addEventListener(
+                'update',
+                function(){
+                    applyForce();
+                    scene.simulate(undefined, 1);
+                }
+            );
+            
+            
+            var light;
+            var ambientLight = new THREE.AmbientLight(0xcccccc, 0.4);
+            scene.add(ambientLight);
+
+            var material = new THREE.MeshBasicMaterial({
+                color: 0xffaa00,
+                wireframe: true
+            });
+
+
+            object = new Physijs.SphereMesh(new THREE.SphereGeometry(5, 20, 10), material);
+            object.position.set(0, 45, 0);
+            scene.add(object);
+            
+            
+            renderer = new THREE.WebGLRenderer({
+                antialias: true
+            });
+
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            container.appendChild(renderer.domElement);
+
+            camera.position.set(60, 50, 60);
+            camera.lookAt(scene.position);
+            scene.add(camera);
+
+            ground_material = Physijs.createMaterial(
+                new THREE.MeshLambertMaterial({
+                    map: new THREE.TextureLoader().load('TEXTURES/ladrillos.jpg')
+                }),
+                0.8, //Friccion
+                0.4 //Restitucion
+            );
+
+            ground_material.map.wrapS = ground_material.map.wrapT = THREE.RepeatWrapping;
+            ground_material.map.repeat.set(3, 3);
+
+            ground = new Physijs.BoxMesh(
+                new THREE.BoxGeometry(100, 1, 100),
+                ground_material,
+                0 //Masa
+            );
+
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            renderer.domElement.addEventListener('mousemove', setMousePosition);
+            requestAnimationFrame(render);
+            scene.simulate();
+           
+        }
+
+
+
+        function render(){
+            requestAnimationFrame(render);
+            renderer.render(scene, camera);
+        };
+
+        setMousePosition = function(evt){
+            //Encuentra en donde intersecta el curso del mouse con el plano
+            var vector = new THREE.Vector3(
+                (evt.clientX / renderer.domElement.clientWidth)  * 2 - 1,
+                - ((evt.clientY / renderer.domElement.clientHeight) * 2 - 1),
+                0.5
+            );
+            vector.unproject(camera);
+            vector.sub(camera.position).normalize();
+
+            var coefficient = (object.position.y - camera.position.y) / vector.y
+            mouse_position = camera.position.clone().add(vector.multiplyScalar(
+                coefficient));
+        };
+
+        applyForce = function (){
+            if(!mouse_position) return;
+            var strength = 40,
+                distance, effect, offset;
+
+            distance = mouse_position.distanceTo(object.position),
+            effect = mouse_position.clone().sub(object.position).normalize()
+            .multiplyScalar(strength / distance).negate(),
+            offset = mouse_position.clone().sub(object.position);
+            object.applyImpulse(effect, offset);
+        };
+
+        window.onload = init;
+    </script>
+</body>
+</html>
